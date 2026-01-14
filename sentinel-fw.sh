@@ -1,54 +1,77 @@
 #!/bin/bash
 
 # ==========================================
-# SentinelFW v1
+# SentinelFW v2
 # Basic UFW Firewall Automation
 # Author: Kamalesh S
 # ==========================================
 
-RED='\033[1;31m'
-GREEN='\033[1;32m'
-CYAN='\033[1;36m'
-RESET='\033[0m'
+THEME="neon"
 
+set_theme() {
+  RED='\033[1;35m'
+  GREEN='\033[1;36m'
+  YELLOW='\033[1;93m'
+  CYAN='\033[1;96m'
+  RESET='\033[0m'
+}
+
+set_theme
 LOGFILE="$HOME/aegis-fw.log"
+
+log() {
+  echo "[$(date)] $1" >> "$LOGFILE"
+}
 
 enable_fw() {
   sudo ufw enable
-  echo "[INFO] Firewall enabled" >> "$LOGFILE"
-}
-
-disable_fw() {
-  sudo ufw disable
+  log "Firewall enabled"
 }
 
 allow_ports() {
-  sudo ufw allow 22
-  sudo ufw allow 80
-  sudo ufw allow 443
+  sudo ufw allow ssh
+  sudo ufw allow http
+  sudo ufw allow https
+  log "Allowed SSH, HTTP, HTTPS"
 }
 
-block_ports() {
-  sudo ufw deny 21
-  sudo ufw deny 23
-  sudo ufw deny 3306
+limit_ssh() {
+  sudo ufw limit ssh
+  log "Enabled SSH rate limiting"
+}
+
+detect_bruteforce() {
+  echo -e "${YELLOW}Scanning for SSH brute-force attempts...${RESET}"
+  sudo grep "Failed password" /var/log/auth.log |
+  awk '{print $(NF-3)}' |
+  sort | uniq -c | sort -nr |
+  while read count ip; do
+    if [[ $count -ge 5 ]]; then
+      sudo ufw deny from "$ip"
+      log "Blocked IP $ip after $count failed attempts"
+    fi
+  done
+}
+
+menu() {
+  clear
+  echo -e "${CYAN}🛡️ SentinelFW v2${RESET}"
+  echo "1) Enable Firewall"
+  echo "2) Allow Common Ports"
+  echo "3) Enable SSH Rate Limit"
+  echo "4) Detect SSH Brute Force"
+  echo "5) Exit"
 }
 
 while true; do
-  clear
-  echo -e "${CYAN}SentinelFW v1${RESET}"
-  echo "1) Enable Firewall"
-  echo "2) Disable Firewall"
-  echo "3) Allow Common Ports"
-  echo "4) Block Insecure Ports"
-  echo "5) Exit"
+  menu
   read -p "Choose: " c
 
   case $c in
     1) enable_fw ;;
-    2) disable_fw ;;
-    3) allow_ports ;;
-    4) block_ports ;;
+    2) allow_ports ;;
+    3) limit_ssh ;;
+    4) detect_bruteforce ;;
     5) exit ;;
   esac
 
